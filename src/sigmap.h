@@ -44,7 +44,7 @@ class Sigmap {
         reference_index_file_path_(reference_index_file_path),
         output_file_path_(output_file_path) {}
   Sigmap(float search_radius, int read_seeding_step_size, int num_threads,
-         int max_num_chunks, int stop_mapping_min_num_anchors,
+         int stop_mapping_min_num_anchors,
          int output_mapping_min_num_anchors, float stop_mapping_ratio,
          float output_mapping_ratio, float stop_mapping_mean_ratio,
          float output_mapping_mean_ratio,
@@ -56,7 +56,6 @@ class Sigmap {
       : search_radius_(search_radius),
         read_seeding_step_size_(read_seeding_step_size),
         num_threads_(num_threads),
-        max_num_chunks_(max_num_chunks),
         stop_mapping_min_num_anchors_(stop_mapping_min_num_anchors),
         output_mapping_min_num_anchors_(output_mapping_min_num_anchors),
         stop_mapping_ratio_(stop_mapping_ratio),
@@ -121,7 +120,6 @@ class Sigmap {
   float search_radius_;
   int read_seeding_step_size_;
   int num_threads_;
-  int max_num_chunks_;
   int stop_mapping_min_num_anchors_;
   int output_mapping_min_num_anchors_;
   float stop_mapping_ratio_;

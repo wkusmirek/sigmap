@@ -637,16 +637,13 @@ void Sigmap::StreamingMap() {
         uint32_t bp_per_sec = 450;
         uint32_t sample_rate = 4000;
         uint32_t chunk_size = 4000;
-        // uint32_t max_num_chunks = 60;
         size_t signal_length =
             read_signal_batch.GetSignalLengthAt(read_signal_index);
         size_t num_chunks = signal_length / chunk_size;
         chains.clear();
         uint32_t num_events = 0;
         uint32_t chunk_index = 0;
-        for (chunk_index = 0; chunk_index < num_chunks &&
-                              chunk_index < (uint32_t)max_num_chunks_;
-             ++chunk_index) {
+        for (chunk_index = 0; chunk_index < num_chunks; ++chunk_index) {
           read_feature_signal.clear();
           read_feature_signal_stdvs.clear();
           size_t signal_start = chunk_size * chunk_index;
@@ -666,7 +663,7 @@ void Sigmap::StreamingMap() {
             num_events += read_feature_signal.size();
             if (chains.size() >= 2) {
               if (chains[0].score / chains[1].score >= stop_mapping_ratio_) {
-                break;
+                //break;
               }
               float mean_chain_score = 0;
               for (uint32_t chain_index = 0; chain_index < chains.size();
@@ -676,95 +673,94 @@ void Sigmap::StreamingMap() {
               mean_chain_score /= chains.size();
               if (chains[0].score >=
                   stop_mapping_mean_ratio_ * mean_chain_score) {
-                break;
+                //break;
               }
             } else if (chains.size() == 1 &&
                        chains[0].num_anchors >=
                            (uint32_t)stop_mapping_min_num_anchors_) {
               if (chunk_index >= 0) {
-                break;
+                //break;
               }
             }
           }
-        }
-        if (chunk_index > 0 && (chunk_index == num_chunks ||
-                                chunk_index == (uint32_t)max_num_chunks_)) {
-          --chunk_index;
-        }
-        float read_position_scale =
-            ((float)(chunk_index + 1) * chunk_size / num_events) /
-            ((float)sample_rate / bp_per_sec);
-        // Save results in vector and output PAF
-        double mapping_time = GetRealTime() - real_mapping_start_time;
-        std::vector<std::vector<PAFMapping> > &mappings_on_diff_ref_seqs =
-            mappings_on_diff_ref_seqs_for_diff_threads[omp_get_thread_num()];
-        float mean_chain_score = 0;
-        for (uint32_t chain_index = 0; chain_index < chains.size();
-             ++chain_index) {
-          mean_chain_score += chains[chain_index].score;
-        }
-        mean_chain_score /= chains.size();
-        if ((chains.size() >= 2 &&
-             (chains[0].score / chains[1].score >= output_mapping_ratio_ ||
-              chains[0].score >=
-                  output_mapping_mean_ratio_ * mean_chain_score)) ||
-            (chains.size() == 1 &&
-             chains[0].num_anchors >=
-                 (uint32_t)output_mapping_min_num_anchors_)) {
-          float anchor_ref_gap_avg_length = 0;
-          float anchor_read_gap_avg_length = 0;
-          float average_anchor_distance = 0;
-          for (size_t ai = 0; ai < chains[0].anchors.size(); ++ai) {
-            average_anchor_distance += chains[0].anchors[ai].distance;
-            if (ai < chains[0].anchors.size() - 1) {
-              anchor_ref_gap_avg_length +=
-                  chains[0].anchors[ai].target_position -
-                  chains[0].anchors[ai + 1].target_position;
-              anchor_read_gap_avg_length +=
-                  chains[0].anchors[ai].query_position -
-                  chains[0].anchors[ai + 1].query_position;
-            }
           }
-          average_anchor_distance /= chains[0].num_anchors;
-          anchor_ref_gap_avg_length /= chains[0].num_anchors;
-          anchor_read_gap_avg_length /= chains[0].num_anchors;
-          std::string tags;
-          tags.append("mt:f:" + std::to_string(mapping_time * 1000));
-          tags.append("\tci:i:" + std::to_string(chunk_index + 1));
-          tags.append("\tsl:i:" +
-                      std::to_string(read_signal_batch.GetSignalLengthAt(
-                          read_signal_index)));
-          tags.append("\tcm:i:" + std::to_string(chains[0].num_anchors));
-          tags.append("\tnc:i:" + std::to_string(chains.size()));
-          tags.append("\ts1:f:" + std::to_string(chains[0].score));
-          tags.append("\ts2:f:" +
-                      std::to_string(chains.size() > 1 ? chains[1].score : 0));
-          tags.append("\tsm:f:" + std::to_string(mean_chain_score));
-          tags.append("\tad:f:" + std::to_string(average_anchor_distance));
-          tags.append("\tat:f:" + std::to_string(anchor_ref_gap_avg_length));
-          tags.append("\taq:f:" + std::to_string(anchor_read_gap_avg_length));
-          mappings_on_diff_ref_seqs[chains[0].reference_sequence_index]
-              .emplace_back(PAFMapping{
-                  (uint32_t)read_signal_index,
-                  std::string(
-                      read_signal_batch.GetSignalNameAt(read_signal_index)),
-                  (uint32_t)read_signal_batch.GetSignalLengthAt(
-                      read_signal_index),
-                  (uint32_t)(read_position_scale *
-                             chains[0].anchors.back().query_position),
-                  (uint32_t)(read_position_scale *
-                             chains[0].anchors[0].query_position),
-                  chains[0].direction == Positive
-                      ? (uint32_t)chains[0].start_position
-                      : (uint32_t)(reference_sequence_batch.GetSequenceLengthAt(
-                                       chains[0].reference_sequence_index) +
-                                   1 - chains[0].end_position),
-                  (uint32_t)(chains[0].end_position - chains[0].start_position +
-                             1),
-                  chains[0].mapq,
-                  chains[0].direction == Positive ? (uint8_t)1 : (uint8_t)0,
-                  (uint8_t)1, tags});
-#ifdef DEBUG
+          if (chunk_index > 0 && chunk_index == num_chunks) {
+            --chunk_index;
+          }
+          float read_position_scale =
+              ((float)(chunk_index + 1) * chunk_size / num_events) /
+              ((float)sample_rate / bp_per_sec);
+          // Save results in vector and output PAF
+          double mapping_time = GetRealTime() - real_mapping_start_time;
+          std::vector<std::vector<PAFMapping> > &mappings_on_diff_ref_seqs =
+              mappings_on_diff_ref_seqs_for_diff_threads[omp_get_thread_num()];
+          float mean_chain_score = 0;
+          for (uint32_t chain_index = 0; chain_index < chains.size();
+               ++chain_index) {
+            mean_chain_score += chains[chain_index].score;
+          }
+          mean_chain_score /= chains.size();
+          if ((chains.size() >= 2 &&
+               (chains[0].score / chains[1].score >= output_mapping_ratio_ ||
+                chains[0].score >=
+                    output_mapping_mean_ratio_ * mean_chain_score)) ||
+              (chains.size() == 1 &&
+               chains[0].num_anchors >=
+                   (uint32_t)output_mapping_min_num_anchors_)) {
+            float anchor_ref_gap_avg_length = 0;
+            float anchor_read_gap_avg_length = 0;
+            float average_anchor_distance = 0;
+            for (size_t ai = 0; ai < chains[0].anchors.size(); ++ai) {
+              average_anchor_distance += chains[0].anchors[ai].distance;
+              if (ai < chains[0].anchors.size() - 1) {
+                anchor_ref_gap_avg_length +=
+                    chains[0].anchors[ai].target_position -
+                    chains[0].anchors[ai + 1].target_position;
+                anchor_read_gap_avg_length +=
+                    chains[0].anchors[ai].query_position -
+                    chains[0].anchors[ai + 1].query_position;
+              }
+            }
+            average_anchor_distance /= chains[0].num_anchors;
+            anchor_ref_gap_avg_length /= chains[0].num_anchors;
+            anchor_read_gap_avg_length /= chains[0].num_anchors;
+            std::string tags;
+            tags.append("mt:f:" + std::to_string(mapping_time * 1000));
+            tags.append("\tci:i:" + std::to_string(chunk_index + 1));
+            tags.append("\tsl:i:" +
+                        std::to_string(read_signal_batch.GetSignalLengthAt(
+                            read_signal_index)));
+            tags.append("\tcm:i:" + std::to_string(chains[0].num_anchors));
+            tags.append("\tnc:i:" + std::to_string(chains.size()));
+            tags.append("\ts1:f:" + std::to_string(chains[0].score));
+            tags.append("\ts2:f:" +
+                        std::to_string(chains.size() > 1 ? chains[1].score : 0));
+            tags.append("\tsm:f:" + std::to_string(mean_chain_score));
+            tags.append("\tad:f:" + std::to_string(average_anchor_distance));
+            tags.append("\tat:f:" + std::to_string(anchor_ref_gap_avg_length));
+            tags.append("\taq:f:" + std::to_string(anchor_read_gap_avg_length));
+            mappings_on_diff_ref_seqs[chains[0].reference_sequence_index]
+                .emplace_back(PAFMapping{
+                    (uint32_t)read_signal_index,
+                    std::string(
+                        read_signal_batch.GetSignalNameAt(read_signal_index)),
+                    (uint32_t)read_signal_batch.GetSignalLengthAt(
+                        read_signal_index),
+                    (uint32_t)(read_position_scale *
+                               chains[0].anchors.back().query_position),
+                    (uint32_t)(read_position_scale *
+                               chains[0].anchors[0].query_position),
+                    chains[0].direction == Positive
+                        ? (uint32_t)chains[0].start_position
+                        : (uint32_t)(reference_sequence_batch.GetSequenceLengthAt(
+                                         chains[0].reference_sequence_index) +
+                                     1 - chains[0].end_position),
+                    (uint32_t)(chains[0].end_position - chains[0].start_position +
+                               1),
+                    chains[0].mapq,
+                    chains[0].direction == Positive ? (uint8_t)1 : (uint8_t)0,
+                    (uint8_t)1, tags});
+//#ifdef DEBUG
           for (size_t i = 0; i < chains.size(); ++i) {
             if (chains[i].direction == Positive) {
               std::cerr << i << " best chaining score: " << chains[i].score
@@ -820,49 +816,49 @@ void Sigmap::StreamingMap() {
                                .size()
                     << "\n";
           std::cerr << "\n";
-#endif
-        } else {
-          std::string tags;
-          tags.append("mt:f:" + std::to_string(mapping_time * 1000));
-          tags.append("\tci:i:" + std::to_string(chunk_index + 1));
-          tags.append("\tsl:i:" +
-                      std::to_string(read_signal_batch.GetSignalLengthAt(
-                          read_signal_index)));
-          if (chains.size() >= 1) {
-            float anchor_ref_gap_avg_length = 0;
-            float anchor_read_gap_avg_length = 0;
-            float average_anchor_distance = 0;
-            for (size_t ai = 0; ai < chains[0].anchors.size(); ++ai) {
-              average_anchor_distance += chains[0].anchors[ai].distance;
-              if (ai < chains[0].anchors.size() - 1) {
-                anchor_ref_gap_avg_length +=
-                    chains[0].anchors[ai].target_position -
-                    chains[0].anchors[ai + 1].target_position;
-                anchor_read_gap_avg_length +=
-                    chains[0].anchors[ai].query_position -
-                    chains[0].anchors[ai + 1].query_position;
+//#endif
+          } else {
+            std::string tags;
+            tags.append("mt:f:" + std::to_string(mapping_time * 1000));
+            tags.append("\tci:i:" + std::to_string(chunk_index + 1));
+            tags.append("\tsl:i:" +
+                        std::to_string(read_signal_batch.GetSignalLengthAt(
+                            read_signal_index)));
+            if (chains.size() >= 1) {
+              float anchor_ref_gap_avg_length = 0;
+              float anchor_read_gap_avg_length = 0;
+              float average_anchor_distance = 0;
+              for (size_t ai = 0; ai < chains[0].anchors.size(); ++ai) {
+                average_anchor_distance += chains[0].anchors[ai].distance;
+                if (ai < chains[0].anchors.size() - 1) {
+                  anchor_ref_gap_avg_length +=
+                      chains[0].anchors[ai].target_position -
+                      chains[0].anchors[ai + 1].target_position;
+                  anchor_read_gap_avg_length +=
+                      chains[0].anchors[ai].query_position -
+                      chains[0].anchors[ai + 1].query_position;
+                }
               }
+              average_anchor_distance /= chains[0].num_anchors;
+              anchor_ref_gap_avg_length /= chains[0].num_anchors;
+              anchor_read_gap_avg_length /= chains[0].num_anchors;
+              tags.append("\tcm:i:" + std::to_string(chains[0].num_anchors));
+              tags.append("\tnc:i:" + std::to_string(chains.size()));
+              tags.append("\ts1:f:" + std::to_string(chains[0].score));
+              tags.append("\ts2:f:" + std::to_string(chains.size() > 1
+                                                         ? chains[1].score
+                                                         : 0));
+              tags.append("\tsm:f:" + std::to_string(mean_chain_score));
+              tags.append("\tad:f:" + std::to_string(average_anchor_distance));
+              tags.append("\tat:f:" + std::to_string(anchor_ref_gap_avg_length));
+              tags.append("\taq:f:" + std::to_string(anchor_read_gap_avg_length));
             }
-            average_anchor_distance /= chains[0].num_anchors;
-            anchor_ref_gap_avg_length /= chains[0].num_anchors;
-            anchor_read_gap_avg_length /= chains[0].num_anchors;
-            tags.append("\tcm:i:" + std::to_string(chains[0].num_anchors));
-            tags.append("\tnc:i:" + std::to_string(chains.size()));
-            tags.append("\ts1:f:" + std::to_string(chains[0].score));
-            tags.append("\ts2:f:" + std::to_string(chains.size() > 1
-                                                       ? chains[1].score
-                                                       : 0));
-            tags.append("\tsm:f:" + std::to_string(mean_chain_score));
-            tags.append("\tad:f:" + std::to_string(average_anchor_distance));
-            tags.append("\tat:f:" + std::to_string(anchor_ref_gap_avg_length));
-            tags.append("\taq:f:" + std::to_string(anchor_read_gap_avg_length));
+            mappings_on_diff_ref_seqs[0].emplace_back(PAFMapping{
+                (uint32_t)read_signal_index,
+                std::string(read_signal_batch.GetSignalNameAt(read_signal_index)),
+                (uint32_t)read_signal_batch.GetSignalLengthAt(read_signal_index),
+                0, 0, 0, 0, 61, (uint8_t)0, (uint8_t)1, tags});
           }
-          mappings_on_diff_ref_seqs[0].emplace_back(PAFMapping{
-              (uint32_t)read_signal_index,
-              std::string(read_signal_batch.GetSignalNameAt(read_signal_index)),
-              (uint32_t)read_signal_batch.GetSignalLengthAt(read_signal_index),
-              0, 0, 0, 0, 61, (uint8_t)0, (uint8_t)1, tags});
-        }
       }  // end of task loop
     }    // end of openmp single
   }      // end of openmp parallel
@@ -1354,10 +1350,7 @@ void SigmapDriver::ParseArgsAndRun(int argc, char *argv[]) {
                                 cxxopts::value<std::string>());
   options.add_options("Development")("search-radius",
                                      "Search radius for each seed [0.08]",
-                                     cxxopts::value<float>(), "FLT")(
-      "max-num-chunks", "Max # chunks before stop trying to map a read [30]",
-      cxxopts::value<int>(),
-      "INT")("min-num-anchors", "Min # anchors to stop mapping [10]",
+                                     cxxopts::value<float>(), "FLT")("min-num-anchors", "Min # anchors to stop mapping [10]",
              cxxopts::value<int>(), "INT")(
       "min-num-anchors-output", "Min # anchors to output mappings [10]",
       cxxopts::value<int>(), "INT")("stop-mapping",
@@ -1388,10 +1381,6 @@ void SigmapDriver::ParseArgsAndRun(int argc, char *argv[]) {
   int num_threads = 1;
   if (result.count("t")) {
     num_threads = result["num-threads"].as<int>();
-  }
-  int max_num_chunks = 30;
-  if (result.count("max-num-chunks")) {
-    max_num_chunks = result["max-num-chunks"].as<int>();
   }
   int stop_mapping_min_num_anchors = 10;
   if (result.count("min-num-anchors")) {
@@ -1491,7 +1480,7 @@ void SigmapDriver::ParseArgsAndRun(int argc, char *argv[]) {
     }
     std::cerr << "Output file: " << output_file_path << "\n";
     Sigmap sigmap_for_mapping(
-        search_radius, read_seeding_step_size, num_threads, max_num_chunks,
+        search_radius, read_seeding_step_size, num_threads,
         stop_mapping_min_num_anchors, output_mapping_min_num_anchors,
         stop_mapping_ratio, output_mapping_ratio, stop_mapping_mean_ratio,
         output_mapping_mean_ratio, reference_file_path, pore_model_file_path,
